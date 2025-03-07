@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Agent System</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-center">Math Agent System</h1>
+        
+        <!-- PDF Upload Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Upload PDF</h2>
+            <form id="uploadForm" class="space-y-4">
+                <div class="flex items-center justify-center w-full">
+                    <label class="flex flex-col w-full h-32 border-4 border-dashed hover:bg-gray-100 hover:border-gray-300">
+                        <div class="flex flex-col items-center justify-center pt-7">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-gray-400 group-hover:text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                            </svg>
+                            <p class="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
+                                Select a PDF file
+                            </p>
+                        </div>
+                        <input type="file" class="opacity-0" accept=".pdf" />
+                    </label>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                    Upload and Process
+                </button>
+            </form>
+        </div>
+
+        <!-- Problems List -->
+        <div id="problemsList" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
+            <h2 class="text-xl font-semibold mb-4">Detected Problems</h2>
+            <div id="problemsContainer" class="space-y-4">
+                <!-- Problems will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Solution Display -->
+        <div id="solutionDisplay" class="bg-white rounded-lg shadow-md p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Solution</h2>
+            <div class="space-y-4">
+                <div>
+                    <h3 class="font-semibold">Explanation:</h3>
+                    <p id="explanation" class="mt-2"></p>
+                </div>
+                <div>
+                    <h3 class="font-semibold">Steps:</h3>
+                    <ol id="steps" class="list-decimal list-inside mt-2"></ol>
+                </div>
+                <div>
+                    <h3 class="font-semibold">MATLAB Code:</h3>
+                    <pre id="matlabCode" class="bg-gray-100 p-4 rounded-md mt-2 overflow-x-auto"></pre>
+                </div>
+                <div>
+                    <h3 class="font-semibold">Mathematical Solution:</h3>
+                    <div id="latexSolution" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.querySelector('input[type="file"]');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayProblems(data.problems);
+                } else {
+                    alert(data.detail || 'Error processing PDF');
+                }
+            } catch (error) {
+                alert('Error uploading file');
+                console.error(error);
+            }
+        });
+
+        function displayProblems(problems) {
+            const container = document.getElementById('problemsContainer');
+            container.innerHTML = '';
+            
+            problems.forEach((problem, index) => {
+                const div = document.createElement('div');
+                div.className = 'p-4 border rounded-md';
+                div.innerHTML = `
+                    <p class="font-semibold">Problem ${index + 1} (${problem.type})</p>
+                    <p class="mt-2">${problem.text}</p>
+                    <button 
+                        onclick="solveProblem(${JSON.stringify(problem)})"
+                        class="mt-2 bg-green-500 text-white py-1 px-3 rounded-md hover:bg-green-600 transition-colors"
+                    >
+                        Solve
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+            
+            document.getElementById('problemsList').classList.remove('hidden');
+        }
+
+        async function solveProblem(problem) {
+            try {
+                const response = await fetch('/solve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(problem)
+                });
+                
+                const solution = await response.json();
+                
+                if (response.ok) {
+                    displaySolution(solution);
+                } else {
+                    alert(solution.detail || 'Error solving problem');
+                }
+            } catch (error) {
+                alert('Error solving problem');
+                console.error(error);
+            }
+        }
+
+        function displaySolution(solution) {
+            document.getElementById('explanation').textContent = solution.explanation;
+            
+            const stepsContainer = document.getElementById('steps');
+            stepsContainer.innerHTML = solution.steps
+                .map(step => `<li class="mb-2">${step}</li>`)
+                .join('');
+            
+            document.getElementById('matlabCode').textContent = solution.matlab_code || 'No MATLAB code available';
+            
+            const latexContainer = document.getElementById('latexSolution');
+            latexContainer.innerHTML = solution.latex_solution || 'No mathematical solution available';
+            
+            // Render LaTeX
+            if (solution.latex_solution) {
+                MathJax.typeset();
+            }
+            
+            document.getElementById('solutionDisplay').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html> 
