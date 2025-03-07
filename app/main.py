@@ -4,14 +4,14 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from dotenv import load_dotenv
+import together
 
 from .services.pdf_processor import PDFProcessor
 from .agents.probability_agent import ProbabilityAgent
 from .core.types import Problem, Solution, ProblemType
 
-# Load environment variables
-load_dotenv()
+# Set Together AI API key
+together.api_key = "daacc8dc45f272f48e8571c2ff9bbccc7169541e632faa75e7efa12900cf2813"
 
 # Initialize FastAPI app
 app = FastAPI(title="Math Agent System")
