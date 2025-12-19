@@ -4,7 +4,7 @@
     "PYTHONUNBUFFERED": "1"
   },
   "functions": {
-    "api/index.py": {
+    "app/*.py": {
       "maxDuration": 30,
       "memory": 1024
     }
@@ -12,7 +12,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/app/main.py"
     }
   ]
 }
