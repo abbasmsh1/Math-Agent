@@ -1,10 +1,20 @@
 import io
 from typing import List, Tuple
+import logging
 import PyPDF2
 from PIL import Image
-import pytesseract
 import re
 from ..core.types import Problem, ProblemType, ProcessedPDF
+
+# Make pytesseract optional (only needed for OCR)
+try:
+    import pytesseract
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+    logging.warning("pytesseract not available - OCR features will be disabled")
+
+logger = logging.getLogger(__name__)
 
 class PDFProcessor:
     def __init__(self):
@@ -26,43 +36,65 @@ class PDFProcessor:
     
     async def process_pdf(self, pdf_content: bytes) -> ProcessedPDF:
         """Process a PDF file and extract problems"""
-        # Read PDF content
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
-        
-        text = ""
-        images = []
-        
-        # Extract text and images from each page
-        for page in pdf_reader.pages:
-            # Extract text
-            text += page.extract_text() + "\n"
+        try:
+            logger.info("Starting PDF processing")
             
-            # Extract images
-            if "/XObject" in page["/Resources"]:
-                for obj in page["/Resources"]["/XObject"].get_object():
-                    if page["/Resources"]["/XObject"][obj]["/Subtype"] == "/Image":
-                        image = page["/Resources"]["/XObject"][obj]
-                        if "/Filter" in image:
-                            if image["/Filter"] == "/DCTDecode":
-                                img_data = image._data
-                                images.append(img_data)
-        
-        # Process text to identify problems
-        problems = self._extract_problems(text)
-        
-        # Create metadata
-        metadata = {
-            "num_pages": len(pdf_reader.pages),
-            "num_problems": len(problems),
-            "num_images": len(images)
-        }
-        
-        return ProcessedPDF(
-            text=text,
-            images=images,
-            problems=problems,
-            metadata=metadata
-        )
+            # Read PDF content
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
+            num_pages = len(pdf_reader.pages)
+            logger.info(f"PDF has {num_pages} pages")
+            
+            text = ""
+            images = []
+            
+            # Extract text and images from each page
+            for page_num, page in enumerate(pdf_reader.pages, 1):
+                try:
+                    # Extract text
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+                    
+                    # Extract images
+                    if "/XObject" in page.get("/Resources", {}):
+                        resources = page["/Resources"]
+                        if "/XObject" in resources:
+                            xobjects = resources["/XObject"].get_object()
+                            for obj in xobjects:
+                                try:
+                                    obj_data = xobjects[obj]
+                                    if obj_data.get("/Subtype") == "/Image":
+                                        image = obj_data
+                                        if "/Filter" in image:
+                                            if image["/Filter"] == "/DCTDecode":
+                                                img_data = image._data
+                                                images.append(img_data)
+                                except Exception as e:
+                                    logger.warning(f"Error extracting image from page {page_num}: {str(e)}")
+                except Exception as e:
+                    logger.warning(f"Error processing page {page_num}: {str(e)}")
+                    continue
+            
+            # Process text to identify problems
+            problems = self._extract_problems(text)
+            logger.info(f"Extracted {len(problems)} problems from PDF")
+            
+            # Create metadata
+            metadata = {
+                "num_pages": num_pages,
+                "num_problems": len(problems),
+                "num_images": len(images)
+            }
+            
+            return ProcessedPDF(
+                text=text,
+                images=images,
+                problems=problems,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"Error processing PDF: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Failed to process PDF: {str(e)}") from e
     
     def _extract_problems(self, text: str) -> List[Problem]:
         """Extract math problems from text"""

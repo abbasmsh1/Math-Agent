@@ -6,77 +6,217 @@
     <title>Math Agent System</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold mb-8 text-center">Math Agent System</h1>
+    <style>
+        /* Dark theme customizations */
+        body {
+            background-color: #0f0f0f;
+            color: #ececec;
+        }
         
-        <!-- PDF Upload Section -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 class="text-xl font-semibold mb-4">Upload PDF</h2>
-            <form id="uploadForm" class="space-y-4">
-                <div class="flex items-center justify-center w-full">
-                    <label class="flex flex-col w-full h-32 border-4 border-dashed hover:bg-gray-100 hover:border-gray-300">
-                        <div class="flex flex-col items-center justify-center pt-7">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-gray-400 group-hover:text-gray-600" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
-                            </svg>
-                            <p class="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
-                                Select a PDF file
-                            </p>
-                        </div>
-                        <input type="file" class="opacity-0" accept=".pdf" />
-                    </label>
-                </div>
-                <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
-                    Upload and Process
-                </button>
-            </form>
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #505050;
+        }
+        
+        /* Chat message animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Code block styling */
+        pre {
+            background-color: #1e1e1e !important;
+            border: 1px solid #333;
+        }
+        
+        code {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        /* LaTeX rendering */
+        .MathJax {
+            color: #ececec !important;
+        }
+    </style>
+</head>
+<body class="bg-[#0f0f0f] text-[#ececec] h-screen flex flex-col overflow-hidden">
+    <!-- Header -->
+    <div class="bg-[#1a1a1a] border-b border-[#2d2d2d] px-4 py-3 flex items-center justify-between">
+        <h1 class="text-xl font-semibold">Math Agent System</h1>
+        <div class="flex items-center space-x-2">
+            <span class="text-sm text-[#9ca3af]">Powered by Mistral AI</span>
         </div>
+    </div>
 
-        <!-- Problems List -->
-        <div id="problemsList" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
-            <h2 class="text-xl font-semibold mb-4">Detected Problems</h2>
-            <div id="problemsContainer" class="space-y-4">
-                <!-- Problems will be inserted here -->
-            </div>
-        </div>
-
-        <!-- Solution Display -->
-        <div id="solutionDisplay" class="bg-white rounded-lg shadow-md p-6 hidden">
-            <h2 class="text-xl font-semibold mb-4">Solution</h2>
-            <div class="space-y-4">
-                <div>
-                    <h3 class="font-semibold">Explanation:</h3>
-                    <p id="explanation" class="mt-2"></p>
-                </div>
-                <div>
-                    <h3 class="font-semibold">Steps:</h3>
-                    <ol id="steps" class="list-decimal list-inside mt-2"></ol>
-                </div>
-                <div>
-                    <h3 class="font-semibold">MATLAB Code:</h3>
-                    <pre id="matlabCode" class="bg-gray-100 p-4 rounded-md mt-2 overflow-x-auto"></pre>
-                </div>
-                <div>
-                    <h3 class="font-semibold">Mathematical Solution:</h3>
-                    <div id="latexSolution" class="mt-2"></div>
-                </div>
+    <!-- Chat Container -->
+    <div id="chatContainer" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        <!-- Welcome Message -->
+        <div class="message max-w-3xl mx-auto">
+            <div class="bg-[#1a1a1a] rounded-2xl px-4 py-3 border border-[#2d2d2d]">
+                <p class="text-[#ececec]">👋 Welcome! I can help you solve math problems. You can:</p>
+                <ul class="list-disc list-inside mt-2 text-[#9ca3af] space-y-1">
+                    <li>Type a math problem or equation</li>
+                    <li>Upload a PDF with math problems</li>
+                    <li>Ask questions about probability, statistics, algebra, calculus, and more</li>
+                </ul>
             </div>
         </div>
     </div>
 
-    <script>
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fileInput = document.querySelector('input[type="file"]');
-            const file = fileInput.files[0];
+    <!-- Input Area -->
+    <div class="bg-[#1a1a1a] border-t border-[#2d2d2d] px-4 py-3">
+        <div class="max-w-4xl mx-auto">
+            <!-- PDF Upload Indicator -->
+            <div id="pdfIndicator" class="hidden mb-2 p-2 bg-[#2d2d2d] rounded-lg flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-5 h-5 text-[#9ca3af]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                    <span id="pdfFileName" class="text-sm text-[#ececec]"></span>
+                </div>
+                <button onclick="clearPdf()" class="text-[#9ca3af] hover:text-[#ececec]">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
             
-            if (!file) {
-                alert('Please select a file');
+            <div class="flex items-end space-x-2">
+                <!-- PDF Upload Button -->
+                <label class="flex items-center justify-center w-10 h-10 rounded-lg bg-[#2d2d2d] hover:bg-[#3d3d3d] cursor-pointer transition-colors">
+                    <input type="file" id="pdfInput" accept=".pdf" class="hidden" onchange="handlePdfSelect(event)">
+                    <svg class="w-5 h-5 text-[#ececec]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                </label>
+                
+                <!-- Text Input -->
+                <div class="flex-1 relative">
+                    <textarea 
+                        id="messageInput" 
+                        rows="1"
+                        placeholder="Type your math problem or equation here..."
+                        class="w-full px-4 py-3 bg-[#2d2d2d] text-[#ececec] rounded-lg border border-[#3d3d3d] focus:outline-none focus:ring-2 focus:ring-[#4d4d4d] resize-none max-h-32 overflow-y-auto"
+                        onkeydown="handleKeyDown(event)"
+                    ></textarea>
+                </div>
+                
+                <!-- Send Button -->
+                <button 
+                    id="sendButton"
+                    onclick="sendMessage()"
+                    class="flex items-center justify-center w-10 h-10 rounded-lg bg-[#4d4d4d] hover:bg-[#5d5d5d] text-[#ececec] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <p class="text-xs text-[#9ca3af] mt-2 text-center">
+                Press Enter to send, Shift+Enter for new line
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let selectedPdfFile = null;
+        let isProcessing = false;
+
+        // Auto-resize textarea
+        const messageInput = document.getElementById('messageInput');
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 128) + 'px';
+        });
+
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function handlePdfSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedPdfFile = file;
+                document.getElementById('pdfFileName').textContent = file.name;
+                document.getElementById('pdfIndicator').classList.remove('hidden');
+            }
+        }
+
+        function clearPdf() {
+            selectedPdfFile = null;
+            document.getElementById('pdfInput').value = '';
+            document.getElementById('pdfIndicator').classList.add('hidden');
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message && !selectedPdfFile) {
                 return;
             }
 
+            if (isProcessing) {
+                return;
+            }
+
+            isProcessing = true;
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = true;
+
+            // Add user message to chat
+            if (message) {
+                addMessage(message, 'user');
+                input.value = '';
+                input.style.height = 'auto';
+            }
+
+            // Handle PDF upload
+            if (selectedPdfFile) {
+                await handlePdfUpload(selectedPdfFile);
+                clearPdf();
+            } else if (message) {
+                // Handle text message
+                await handleTextMessage(message);
+            }
+
+            isProcessing = false;
+            sendButton.disabled = false;
+            input.focus();
+        }
+
+        async function handlePdfUpload(file) {
+            addMessage(`📄 Uploading ${file.name}...`, 'assistant');
+            
             const formData = new FormData();
             formData.append('file', file);
 
@@ -89,82 +229,197 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    displayProblems(data.problems);
+                    removeLastMessage();
+                    if (data.problems && data.problems.length > 0) {
+                        addMessage(`Found ${data.problems.length} problem(s) in the PDF.`, 'assistant');
+                        data.problems.forEach((problem, index) => {
+                            setTimeout(() => {
+                                addMessage(`**Problem ${index + 1}** (${problem.type}):\n${problem.text}`, 'assistant');
+                                // Auto-solve the problem
+                                setTimeout(() => solveProblemFromText(problem.text, problem.type), 1000);
+                            }, index * 500);
+                        });
+                    } else {
+                        addMessage('PDF processed but no problems were detected.', 'assistant');
+                    }
                 } else {
-                    alert(data.detail || 'Error processing PDF');
+                    removeLastMessage();
+                    addMessage(`Error: ${data.detail || 'Failed to process PDF'}`, 'assistant', true);
                 }
             } catch (error) {
-                alert('Error uploading file');
-                console.error(error);
+                removeLastMessage();
+                addMessage(`Error uploading PDF: ${error.message}`, 'assistant', true);
             }
-        });
-
-        function displayProblems(problems) {
-            const container = document.getElementById('problemsContainer');
-            container.innerHTML = '';
-            
-            problems.forEach((problem, index) => {
-                const div = document.createElement('div');
-                div.className = 'p-4 border rounded-md';
-                div.innerHTML = `
-                    <p class="font-semibold">Problem ${index + 1} (${problem.type})</p>
-                    <p class="mt-2">${problem.text}</p>
-                    <button 
-                        onclick="solveProblem(${JSON.stringify(problem)})"
-                        class="mt-2 bg-green-500 text-white py-1 px-3 rounded-md hover:bg-green-600 transition-colors"
-                    >
-                        Solve
-                    </button>
-                `;
-                container.appendChild(div);
-            });
-            
-            document.getElementById('problemsList').classList.remove('hidden');
         }
 
-        async function solveProblem(problem) {
+        async function handleTextMessage(text) {
+            addMessage('', 'assistant'); // Placeholder for streaming response
+            
             try {
-                const response = await fetch('/solve', {
+                const response = await fetch('/solve-text', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(problem)
+                    body: JSON.stringify({
+                        text: text,
+                        problem_type: null
+                    })
                 });
                 
                 const solution = await response.json();
                 
                 if (response.ok) {
+                    removeLastMessage();
                     displaySolution(solution);
                 } else {
-                    alert(solution.detail || 'Error solving problem');
+                    removeLastMessage();
+                    addMessage(`Error: ${solution.detail || 'Failed to solve problem'}`, 'assistant', true);
                 }
             } catch (error) {
-                alert('Error solving problem');
-                console.error(error);
+                removeLastMessage();
+                addMessage(`Error: ${error.message}`, 'assistant', true);
             }
         }
 
-        function displaySolution(solution) {
-            document.getElementById('explanation').textContent = solution.explanation;
+        async function solveProblemFromText(text, type) {
+            addMessage('', 'assistant');
             
-            const stepsContainer = document.getElementById('steps');
-            stepsContainer.innerHTML = solution.steps
-                .map(step => `<li class="mb-2">${step}</li>`)
-                .join('');
+            try {
+                const response = await fetch('/solve-text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        problem_type: type
+                    })
+                });
+                
+                const solution = await response.json();
+                
+                if (response.ok) {
+                    removeLastMessage();
+                    displaySolution(solution);
+                } else {
+                    removeLastMessage();
+                    addMessage(`Error: ${solution.detail || 'Failed to solve problem'}`, 'assistant', true);
+                }
+            } catch (error) {
+                removeLastMessage();
+                addMessage(`Error: ${error.message}`, 'assistant', true);
+            }
+        }
+
+        function addMessage(content, role, isError = false) {
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
             
-            document.getElementById('matlabCode').textContent = solution.matlab_code || 'No MATLAB code available';
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-3xl rounded-2xl px-4 py-3 ${
+                role === 'user' 
+                    ? 'bg-[#4d4d4d] text-[#ececec]' 
+                    : isError
+                    ? 'bg-[#3d1a1a] text-[#ff6b6b] border border-[#4d2d2d]'
+                    : 'bg-[#1a1a1a] text-[#ececec] border border-[#2d2d2d]'
+            }`;
             
-            const latexContainer = document.getElementById('latexSolution');
-            latexContainer.innerHTML = solution.latex_solution || 'No mathematical solution available';
-            
-            // Render LaTeX
-            if (solution.latex_solution) {
-                MathJax.typeset();
+            if (role === 'assistant' && content) {
+                bubble.innerHTML = formatMessage(content);
+            } else {
+                bubble.textContent = content;
             }
             
-            document.getElementById('solutionDisplay').classList.remove('hidden');
+            messageDiv.appendChild(bubble);
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+            
+            // Render LaTeX if present
+            if (window.MathJax) {
+                MathJax.typesetPromise([bubble]).catch(function (err) {
+                    console.error('MathJax rendering error:', err);
+                });
+            }
         }
+
+        function formatMessage(content) {
+            // Convert markdown-like formatting to HTML
+            let html = content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code class="bg-[#2d2d2d] px-1 py-0.5 rounded">$1</code>')
+                .replace(/\n/g, '<br>');
+            
+            return html;
+        }
+
+        function displaySolution(solution) {
+            let content = '';
+            
+            if (solution.explanation) {
+                content += `<div class="mb-4"><strong>Explanation:</strong><br>${formatMessage(solution.explanation)}</div>`;
+            }
+            
+            if (solution.steps && solution.steps.length > 0) {
+                content += `<div class="mb-4"><strong>Solution Steps:</strong><ol class="list-decimal list-inside mt-2 space-y-2">`;
+                solution.steps.forEach(step => {
+                    content += `<li class="mb-2">${formatMessage(step)}</li>`;
+                });
+                content += `</ol></div>`;
+            }
+            
+            if (solution.matlab_code) {
+                content += `<div class="mb-4"><strong>MATLAB Code:</strong><pre class="bg-[#1e1e1e] p-3 rounded-lg mt-2 overflow-x-auto border border-[#2d2d2d]"><code>${escapeHtml(solution.matlab_code)}</code></pre></div>`;
+            }
+            
+            if (solution.latex_solution) {
+                content += `<div class="mb-4"><strong>Mathematical Solution:</strong><div class="mt-2">${solution.latex_solution}</div></div>`;
+            }
+            
+            if (solution.confidence) {
+                content += `<div class="text-xs text-[#9ca3af] mt-2">Confidence: ${(solution.confidence * 100).toFixed(0)}%</div>`;
+            }
+            
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message flex justify-start';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'max-w-3xl rounded-2xl px-4 py-3 bg-[#1a1a1a] text-[#ececec] border border-[#2d2d2d]';
+            bubble.innerHTML = content;
+            
+            messageDiv.appendChild(bubble);
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+            
+            // Render LaTeX
+            if (window.MathJax) {
+                MathJax.typesetPromise([bubble]).catch(function (err) {
+                    console.error('MathJax rendering error:', err);
+                });
+            }
+        }
+
+        function removeLastMessage() {
+            const container = document.getElementById('chatContainer');
+            const messages = container.querySelectorAll('.message');
+            if (messages.length > 0) {
+                messages[messages.length - 1].remove();
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Focus input on load
+        window.addEventListener('load', () => {
+            document.getElementById('messageInput').focus();
+        });
     </script>
 </body>
-</html> 
+</html>

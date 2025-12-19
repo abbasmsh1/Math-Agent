@@ -1,15 +1,19 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
-import together
+from typing import Dict, Any, List, Optional
+import logging
 from ..core.types import Problem, Solution
+from ..core.config import Config
+
+logger = logging.getLogger(__name__)
+
 
 class BaseAgent(ABC):
     """Base class for all math agents"""
     
-    def __init__(self, model: str = "deepseek-ai/deepseek-coder-1.3b-instruct"):
-        self.model = model
-        # Set Together AI API key
-        together.api_key = "daacc8dc45f272f48e8571c2ff9bbccc7169541e632faa75e7efa12900cf2813"
+    def __init__(self, model: Optional[str] = None):
+        self.model = model or Config.MISTRAL_MODEL
+        self.client = Config.get_mistral_client()
+        logger.info(f"Initialized {self.__class__.__name__} with model: {self.model}")
         
     @abstractmethod
     def can_handle(self, problem: Problem) -> bool:
@@ -22,34 +26,27 @@ class BaseAgent(ABC):
         pass
     
     async def _get_completion(self, messages: List[Dict[str, str]]) -> str:
-        """Get completion from Together AI API"""
-        # Convert messages to the format expected by Together AI
-        prompt = ""
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            if role == "system":
-                prompt += f"<system>{content}</system>\n"
-            elif role == "user":
-                prompt += f"<human>{content}</human>\n"
-            elif role == "assistant":
-                prompt += f"<assistant>{content}</assistant>\n"
-        prompt += "<assistant>"
-        
-        # Call Together AI API
-        response = together.Complete.create(
-            prompt=prompt,
-            model=self.model,
-            max_tokens=2048,
-            temperature=0.2,
-            top_p=0.95,
-            top_k=50,
-            repetition_penalty=1.2,
-            stop=["<human>", "</assistant>"]
-        )
-        
-        # Extract the generated text
-        return response['output']['choices'][0]['text'].strip()
+        """Get completion from Mistral AI API"""
+        try:
+            logger.debug(f"Requesting completion with model: {self.model}")
+            
+            # Call Mistral AI API
+            response = self.client.chat.complete(
+                model=self.model,
+                messages=messages,
+                max_tokens=Config.MAX_TOKENS,
+                temperature=Config.TEMPERATURE,
+                top_p=Config.TOP_P,
+            )
+            
+            # Extract the generated text
+            content = response.choices[0].message.content
+            logger.debug("Successfully received completion from Mistral AI")
+            return content.strip()
+            
+        except Exception as e:
+            logger.error(f"Error getting completion from Mistral AI: {str(e)}")
+            raise RuntimeError(f"Failed to get completion from Mistral AI: {str(e)}") from e
     
     def _format_matlab_code(self, code: str) -> str:
         """Format MATLAB code with proper indentation and comments"""
