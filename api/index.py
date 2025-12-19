@@ -13,6 +13,7 @@ if str(project_root) not in sys.path:
 # Import the FastAPI app
 # This import happens when the serverless function is invoked
 from app.main import app
+app = app
 
 # Export the app for Vercel
 # Vercel will automatically handle the ASGI app and route requests to it
