@@ -10,10 +10,17 @@ logger = logging.getLogger(__name__)
 class BaseAgent(ABC):
     """Base class for all math agents"""
     
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, api_key: Optional[str] = None):
         self.model = model or Config.MISTRAL_MODEL
-        self.client = Config.get_mistral_client()
+        self.api_key = api_key
+        self.client = None  # Will be initialized on first use
         logger.info(f"Initialized {self.__class__.__name__} with model: {self.model}")
+    
+    def _get_client(self):
+        """Get or create Mistral client with current API key"""
+        if self.client is None:
+            self.client = Config.get_mistral_client(self.api_key)
+        return self.client
         
     @abstractmethod
     def can_handle(self, problem: Problem) -> bool:
@@ -30,8 +37,11 @@ class BaseAgent(ABC):
         try:
             logger.debug(f"Requesting completion with model: {self.model}")
             
+            # Get client (will use session API key if available)
+            client = self._get_client()
+            
             # Call Mistral AI API
-            response = self.client.chat.complete(
+            response = client.chat.complete(
                 model=self.model,
                 messages=messages,
                 max_tokens=Config.MAX_TOKENS,

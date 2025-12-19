@@ -3,6 +3,8 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+import secrets
 
 from .services.pdf_processor import PDFProcessor
 from .services.text_processor import TextProcessor
@@ -19,22 +21,35 @@ logger = logging.getLogger(__name__)
 # This is important for Vercel serverless functions
 _config_validated = False
 
-def validate_config_on_demand():
-    """Validate configuration when first needed"""
+def validate_config_on_demand(request: Request):
+    """Validate configuration when first needed, checking session first"""
     global _config_validated
-    if not _config_validated:
-        try:
-            Config.validate()
-            _config_validated = True
-        except ValueError as e:
-            logger.error(f"Configuration validation failed: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Configuration error: {str(e)}. Please check your environment variables."
-            )
+    session_key = request.session.get("mistral_api_key")
+    
+    try:
+        Config.validate(session_key)
+        _config_validated = True
+    except ValueError as e:
+        logger.error(f"Configuration validation failed: {str(e)}")
+        raise HTTPException(
+            status_code=401,
+            detail=f"API key not configured. Please set your Mistral API key in settings."
+        )
+
+def get_api_key_from_session(request: Request) -> Optional[str]:
+    """Get API key from session"""
+    return request.session.get("mistral_api_key")
 
 # Initialize FastAPI app
 app = FastAPI(title="Math Agent System")
+
+# Add session middleware for secure API key storage
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=secrets.token_urlsafe(32),
+    max_age=86400,  # 24 hours
+    same_site="lax"
+)
 
 # Mount static files (optional - only if directory exists)
 import os
@@ -48,21 +63,59 @@ else:
 # Initialize templates
 templates = Jinja2Templates(directory="app/templates")
 
-# Initialize services and agents
+# Initialize services
 pdf_processor = PDFProcessor()
 text_processor = TextProcessor()
-probability_agent = ProbabilityAgent()
-general_agent = GeneralAgent()
+# Agents will be created per-request with session API keys
 
 # Request models
 class TextInputRequest(BaseModel):
     text: str
     problem_type: Optional[str] = None
 
+class ApiKeyRequest(BaseModel):
+    api_key: str
+
+@app.post("/api/set-api-key")
+async def set_api_key(request: Request, api_key_request: ApiKeyRequest):
+    """Set or update the Mistral API key in the session"""
+    try:
+        # Validate the API key by trying to create a client
+        from mistralai import Mistral
+        
+        # Try a simple validation - just store it if it's not empty
+        if api_key_request.api_key and len(api_key_request.api_key.strip()) > 0:
+            request.session["mistral_api_key"] = api_key_request.api_key.strip()
+            logger.info("API key set in session")
+            return {
+                "status": "success",
+                "message": "API key saved successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="API key cannot be empty")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting API key: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid API key: {str(e)}")
+
+@app.get("/api/check-api-key")
+async def check_api_key(request: Request):
+    """Check if API key is configured"""
+    session_key = get_api_key_from_session(request)
+    env_key = Config.MISTRAL_API_KEY
+    
+    has_key = bool(session_key or env_key)
+    
+    return {
+        "configured": has_key,
+        "source": "session" if session_key else ("environment" if env_key else "none")
+    }
+
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(request: Request, file: UploadFile = File(...)):
     """Upload and process a PDF file"""
-    validate_config_on_demand()
+    validate_config_on_demand(request)
     
     if not file.filename or not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="File must be a PDF")
@@ -96,25 +149,30 @@ async def upload_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
 @app.post("/solve-text")
-async def solve_text_equation(request: TextInputRequest):
+async def solve_text_equation(request: Request, text_request: TextInputRequest):
     """Solve a math problem or equation from text input"""
-    validate_config_on_demand()
+    validate_config_on_demand(request)
+    api_key = get_api_key_from_session(request)
     
     try:
-        logger.info(f"Processing text input: {request.text[:100]}...")
+        logger.info(f"Processing text input: {text_request.text[:100]}...")
         
         # Process the text input
-        problem = text_processor.process_text(request.text, request.problem_type)
+        problem = text_processor.process_text(text_request.text, text_request.problem_type)
         
         logger.info(f"Detected problem type: {problem.type.value}")
         
+        # Create agents with session API key
+        prob_agent = ProbabilityAgent(api_key=api_key)
+        gen_agent = GeneralAgent(api_key=api_key)
+        
         # Select appropriate agent based on problem type
         if problem.type in [ProblemType.PROBABILITY, ProblemType.STATISTICS]:
-            solution = await probability_agent.solve(problem)
+            solution = await prob_agent.solve(problem)
         else:
             # Use general agent for all other problem types
             logger.info(f"Using GeneralAgent for problem type: {problem.type.value}")
-            solution = await general_agent.solve(problem)
+            solution = await gen_agent.solve(problem)
         
         logger.info("Problem solved successfully")
         
@@ -136,20 +194,25 @@ async def solve_text_equation(request: TextInputRequest):
         raise HTTPException(status_code=500, detail=f"Error solving problem: {str(e)}")
 
 @app.post("/solve")
-async def solve_problem(problem: Problem):
+async def solve_problem(request: Request, problem: Problem):
     """Solve a math problem (from Problem object)"""
-    validate_config_on_demand()
+    validate_config_on_demand(request)
+    api_key = get_api_key_from_session(request)
     
     try:
         logger.info(f"Solving problem of type: {problem.type.value}")
         
+        # Create agents with session API key
+        prob_agent = ProbabilityAgent(api_key=api_key)
+        gen_agent = GeneralAgent(api_key=api_key)
+        
         # Select appropriate agent based on problem type
         if problem.type in [ProblemType.PROBABILITY, ProblemType.STATISTICS]:
-            solution = await probability_agent.solve(problem)
+            solution = await prob_agent.solve(problem)
         else:
             # Use general agent for all other problem types
             logger.info(f"Using GeneralAgent for problem type: {problem.type.value}")
-            solution = await general_agent.solve(problem)
+            solution = await gen_agent.solve(problem)
         
         logger.info("Problem solved successfully")
         

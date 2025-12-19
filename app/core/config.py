@@ -31,19 +31,29 @@ class Config:
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
     
     @classmethod
-    def validate(cls) -> None:
+    def get_api_key(cls, session_key: Optional[str] = None) -> str:
+        """Get API key from session or environment"""
+        # Priority: session key > environment variable
+        if session_key:
+            return session_key
+        return cls.MISTRAL_API_KEY
+    
+    @classmethod
+    def validate(cls, api_key: Optional[str] = None) -> None:
         """Validate that required configuration is present"""
-        if not cls.MISTRAL_API_KEY:
+        key = cls.get_api_key(api_key)
+        if not key:
             raise ValueError(
-                "MISTRAL_API_KEY environment variable is required. "
-                "Please set it in your .env file or environment."
+                "MISTRAL_API_KEY is required. "
+                "Please set it in your .env file, environment variables, or in the application settings."
             )
         logger.info("Configuration validated successfully")
     
     @classmethod
-    def get_mistral_client(cls):
+    def get_mistral_client(cls, api_key: Optional[str] = None):
         """Get a configured Mistral AI client"""
         from mistralai import Mistral
-        cls.validate()
-        return Mistral(api_key=cls.MISTRAL_API_KEY)
+        key = cls.get_api_key(api_key)
+        cls.validate(key)
+        return Mistral(api_key=key)
 
